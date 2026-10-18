@@ -1,0 +1,262 @@
+/* 卡片工作台样式（Hermes 自造 · 2026-10-12）
+   只用应用主题变量（--bg/--ink/--hairline/--accent…），明暗自动跟随，零硬编码颜色。 */
+
+.cw {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+/* ── 顶部操作条 ───────────────────────────────────────────── */
+.cw-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--bg-sidebar);
+}
+.cw-brand { display: flex; flex-direction: column; gap: 1px; margin-right: 6px; min-width: 0 }
+.cw-brand h2 { font-size: 15px; font-weight: 650; color: var(--ink); white-space: nowrap }
+.cw-brand small { font-size: 10.5px; color: var(--ink-faint); white-space: nowrap }
+.cw-spacer { flex: 1; min-width: 8px }
+.cw-btn {
+  font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--menu-bg); color: var(--ink);
+  white-space: nowrap; transition: border-color .15s, background .15s;
+}
+.cw-btn:hover { border-color: var(--accent-tint-border); background: var(--menu-hover) }
+.cw-meta { font-size: 10.5px; color: var(--ink-faint); white-space: nowrap }
+
+/* 搜索框 */
+.cw-search {
+  font: inherit; font-size: 12px; padding: 6px 11px; border-radius: 9px;
+  border: 1px solid var(--hairline); background: var(--menu-bg); color: var(--ink);
+  width: 168px; transition: border-color .15s;
+}
+.cw-search:focus { outline: none; border-color: var(--accent-tint-border) }
+
+/* 「加载更多」按钮（横跨整行居中） */
+.cw-more { grid-column: 1 / -1; display: flex; justify-content: center; padding: 6px 0 2px }
+
+/* ── 错误条 ───────────────────────────────────────────────── */
+.cw-err {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+  background: var(--danger-bg); color: var(--danger); border-bottom: 1px solid var(--hairline); font-size: 12px;
+}
+.cw-err span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.cw-err button { border: none; background: none; color: inherit; cursor: pointer; font-size: 15px; line-height: 1 }
+
+/* ── 主体：卡片区 + 详情面板 ──────────────────────────────── */
+.cw-body { flex: 1; min-height: 0; display: flex }
+
+/* ── 自由画布（阶段3）：卡片可拖拽、画布可平移、卡片间可连线 ── */
+.cw-board {
+  flex: 1; min-width: 0; min-height: 0; position: relative; overflow: auto;
+  cursor: grab;
+  background: radial-gradient(circle at 1px 1px, var(--hairline) 1px, transparent 0) 0 0 / 18px 18px;
+}
+.cw-board.panning { cursor: grabbing }
+/* inner：尺寸由 JS 按内容实际大小内联设置（见 boardSize）——不再写死，
+   否则卡片超出范围就永远看不到。这里只管定位与变换。 */
+.cw-board-inner { position: relative; left: 0; top: 0; min-width: 100%; min-height: 100%; will-change: transform }
+
+/* 连线层 */
+.cw-links { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible }
+.cw-link { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: .55 }
+.cw-link-temp { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; opacity: .85 }
+
+/* 卡片上的连线锚点（hover 才显）*/
+.cw-anchor {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; line-height: 1; z-index: 3; cursor: crosshair;
+}
+.cw-anchor.out {
+  right: -8px;
+  background: var(--accent); color: #fff; border: 2px solid var(--panel);
+  font-weight: 700; opacity: 0; transition: opacity .12s;
+}
+.cw-card:hover .cw-anchor.out, .cw-card.linkable .cw-anchor.out { opacity: 1 }
+.cw-anchor.out:hover { transform: translateY(-50%) scale(1.2) }
+.cw-card.linkable { outline: 2px dashed var(--accent); outline-offset: 3px }
+
+/* 加载更多（浮在画布底部居中）*/
+.cw-more {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 5;
+}
+
+/* 重置布局（浮在画布右下）*/
+.cw-reset {
+  position: absolute; right: 14px; bottom: 14px; z-index: 5;
+  font: inherit; font-size: 11px; padding: 5px 11px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--menu-bg); color: var(--ink-faint);
+}
+.cw-reset:hover { border-color: var(--accent-tint-border); color: var(--ink) }
+
+/* ── 卡片 ─────────────────────────────────────────────────── */
+.cw-card {
+  display: flex; flex-direction: column; gap: 10px; box-sizing: border-box;
+  padding: 13px 15px; border-radius: 13px; cursor: grab;
+  border: 1px solid var(--hairline); background: var(--menu-bg);
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s, box-shadow .15s;
+}
+.cw-card:active { cursor: grabbing }
+.cw-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+.cw-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+.cw-card-title {
+  font-size: 13.5px; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.cw-card-when { font-size: 10.5px; color: var(--ink-faint) }
+.cw-card-foot { display: flex; justify-content: flex-end; margin-top: 2px }
+.cw-mini {
+  font: inherit; font-size: 11.5px; padding: 4px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--hairline); background: transparent; color: var(--accent);
+}
+.cw-mini:hover { background: var(--accent-soft); border-color: var(--accent-tint-border) }
+
+/* ── 空状态引导（参考速查表「空画布引导」）────────────────── */
+.cw-empty {
+  grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 60px 20px; text-align: center; color: var(--ink-faint);
+}
+.cw-empty-icon { color: var(--accent); opacity: .4 }
+.cw-empty-h { font-size: 15px; font-weight: 600; color: var(--ink) }
+.cw-empty-p { font-size: 12px; color: var(--ink-faint) }
+
+/* ── 提示文字 ─────────────────────────────────────────────── */
+.cw-hint { font-size: 12px; color: var(--ink-faint); line-height: 1.6; padding: 8px 4px }
+.cw-hint.big { padding: 40px }
+
+/* ── 右侧详情面板 ─────────────────────────────────────────── */
+.cw-detail {
+  flex: 0 0 340px; min-width: 0; display: flex; flex-direction: column;
+  border-left: 1px solid var(--hairline); background: var(--bg-sidebar);
+}
+.cw-detail.collapsed { flex-basis: 0; overflow: hidden; border-left: none; padding: 0 }
+.cw-detail-h {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid var(--hairline);
+}
+.cw-detail-h b {
+  font-size: 13px; font-weight: 650; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.cw-detail-x {
+  flex: 0 0 auto; border: none; background: none; color: var(--ink-faint);
+  cursor: pointer; font-size: 18px; line-height: 1; padding: 4px; border-radius: 6px;
+}
+.cw-detail-x:hover { color: var(--danger); background: var(--danger-bg) }
+.cw-detail-body {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* ── 详情里的消息（一次对话）──────────────────────────────── */
+.cw-msg { display: flex; flex-direction: column; gap: 3px }
+.cw-role { font-size: 10px; font-weight: 650; color: var(--ink-faint); letter-spacing: .04em; text-transform: uppercase }
+.cw-msg.user .cw-role { color: var(--accent) }
+.cw-text {
+  font-size: 12.5px; line-height: 1.6; color: var(--ink);
+  white-space: pre-wrap; word-break: break-word;
+  padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--menu-bg);
+}
+.cw-msg.user .cw-text { background: var(--accent-soft); border-color: var(--accent-tint-border) }
+
+/* ── 详情面板底部：继续对话的输入行 ───────────────────────── */
+.cw-compose {
+  flex: 0 0 auto; display: flex; gap: 8px; padding: 10px 12px;
+  border-top: 1px solid var(--hairline); background: var(--menu-bg);
+}
+.cw-input {
+  flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 8px 11px; border-radius: 9px;
+  border: 1px solid var(--hairline); background: var(--bg); color: var(--ink);
+  transition: border-color .15s;
+}
+.cw-input:focus { outline: none; border-color: var(--accent-tint-border) }
+.cw-sendbtn {
+  flex: 0 0 auto; font: inherit; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 9px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;
+  white-space: nowrap; transition: filter .15s, opacity .15s;
+}
+.cw-sendbtn:hover:not(:disabled) { filter: brightness(1.1) }
+.cw-sendbtn:disabled { opacity: .45; cursor: not-allowed }
+
+/* ── 会话列表：网格铺开 ───────────────────────────────────── */
+.cw-canvas {
+  flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding: 18px;
+  display: grid; gap: 14px; align-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  background: radial-gradient(circle at 1px 1px, var(--hairline) 1px, transparent 0) 0 0 / 18px 18px;
+}
+
+/* ── 档位切换（只看重点 / 看全部）────────────────────────── */
+.cw-seg {
+  display: inline-flex; border: 1px solid var(--hairline); border-radius: 9px;
+  overflow: hidden; background: var(--menu-bg);
+}
+.cw-segbtn {
+  font: inherit; font-size: 11.5px; padding: 6px 12px; cursor: pointer; border: none;
+  background: transparent; color: var(--ink-faint); white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.cw-segbtn + .cw-segbtn { border-left: 1px solid var(--hairline) }
+.cw-segbtn:hover { color: var(--ink) }
+.cw-segbtn.on { background: var(--accent-soft); color: var(--accent); font-weight: 600 }
+
+/* ── 回合卡（会话画布里的卡片）────────────────────────────── */
+.cw-turn { gap: 6px; cursor: grab }
+.cw-turn.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+.cw-turn-h { display: flex; align-items: center; gap: 6px }
+.cw-turn-no {
+  font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: .04em;
+  background: var(--accent-soft); border-radius: 6px; padding: 2px 7px;
+}
+.cw-turn-tag {
+  font-size: 9.5px; color: var(--ink-faint); border: 1px solid var(--hairline);
+  border-radius: 5px; padding: 1px 6px;
+}
+.cw-turn-tag.sys { color: var(--accent); border-color: var(--accent-tint-border); background: var(--accent-soft) }
+.cw-turn-q {
+  font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.cw-turn-a {
+  font-size: 11.5px; color: var(--ink-dim); line-height: 1.45;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+
+/* ── 分支卡：从回合分叉出的新会话 ─────────────────────────── */
+.cw-branch-btn {
+  font: inherit; font-size: 13px; line-height: 1; padding: 2px 6px; border-radius: 6px;
+  border: 1px solid var(--hairline); background: transparent; color: var(--ink-faint);
+  cursor: pointer; opacity: 0; transition: opacity .12s, color .12s, border-color .12s;
+}
+.cw-card:hover .cw-branch-btn { opacity: 1 }
+.cw-branch-btn:hover { color: var(--accent); border-color: var(--accent-tint-border) }
+.cw-branch { border-style: dashed; border-color: var(--accent-tint-border) }
+.cw-branch.busy { opacity: .7 }
+.cw-turn-no.branch { background: transparent; border: 1px dashed var(--accent-tint-border); color: var(--accent) }
+.cw-branch-input {
+  font: inherit; font-size: 12px; padding: 7px 9px; border-radius: 8px;
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--hairline); background: var(--bg); color: var(--ink);
+  transition: border-color .15s;
+}
+.cw-branch-input:focus { outline: none; border-color: var(--accent-tint-border) }
+.cw-branch-done { font-size: 11.5px; color: var(--ink-dim); display: flex; flex-direction: column; gap: 4px }
+.cw-branch-done code { font-size: 11px; color: var(--accent) }
+.cw-branch-tip { font-size: 10.5px; color: var(--ink-faint) }
+.cw-link.branch { stroke-dasharray: 3 3; opacity: .8 }

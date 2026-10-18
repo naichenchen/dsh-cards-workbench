@@ -1,0 +1,8 @@
+# dsh-cards-workbench: 把 DSH 对话摊成会话地图（一卡一回合）
+# 移植自 Hermes 气泡谱插件 xiaobao-hermes-cards-workbench，改成 DSH 前端 bundle。
+# 参考 dsh-synapse 的 cordis.patch.yml 结构。cards 不存自己的数据（只读 DSH 会话），
+# 所以不需要 dataFile。
+- insert:
+    - id: cards-workbench
+      name: dsh-cards-workbench
+      config: {}

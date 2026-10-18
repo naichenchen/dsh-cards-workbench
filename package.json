@@ -1,0 +1,60 @@
+{
+  "name": "dsh-cards-workbench",
+  "version": "0.1.0",
+  "description": "会话地图——把 DSH 对话摊成画布，一卡一回合（移植自 Hermes 气泡谱 CardWorkbench）",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "conversation",
+    "visualization"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "public",
+    "src/card.css",
+    "cordis.patch.yml",
+    "build.js",
+    "build-stamp.json",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-api-workspace-controller",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "immediately": false
+    }
+  },
+  "scripts": {
+    "build": "node build.js",
+    "check": "node --check index.js && node --check client.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}
