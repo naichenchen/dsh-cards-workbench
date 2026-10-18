@@ -12,20 +12,6 @@ window.__ModuleLoader__.load({
     const PANEL_ID = 'cards-workbench'
     const SOURCE = 'cards-workbench'
 
-    // DSH 事件流 → 脉络图的 {role, text}（照 synapse app.js messagesFromEvents）
-    const messagesFromEvents = (events) => {
-      if (!Array.isArray(events)) return []
-      return events.flatMap(e => {
-        const content = e?.data?.message?.content ?? e?.data?.content
-        const text = Array.isArray(content)
-          ? content.filter(b => b?.type === 'text').map(b => b.text).filter(Boolean).join('\n')
-          : ''
-        if (e?.type === 'user/message' && text) return [{ role: 'user', text }]
-        if (e?.type === 'assistant/message' && text) return [{ role: 'assistant', text }]
-        return []
-      })
-    }
-
     module.exports.inject = ['slots', 'sessions', 'workspaces', 'uiWorkspace', 'uiConversation']
     module.exports.apply = (ctx) => {
       // ── 桥：iframe(脉络图) ↔ DSH ctx API ──

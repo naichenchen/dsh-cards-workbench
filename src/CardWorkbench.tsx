@@ -239,6 +239,37 @@ function toTurns(msgs: HistoryMessage[]): Turn[] {
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s)
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
 
+/* ★ 等 AI 回复落地。
+   DSH 的 session.prompt(..., 'queue') 只负责把消息【投递进队列】，它 resolve 时
+   AI 往往还没开始跑 —— 此时立刻 load() 只能看到「你问了、没人答」的半截回合，
+   画布上就是「发完消息没回复」。
+   这里轮询到该回合真正闭合（最后一条不是 user）再让上层渲染。
+   @returns 拿到的最新消息列表；超时则返回最后一次读到的（不让 UI 卡死） */
+async function waitForTurnSettled(
+  loadOnce: () => Promise<HistoryMessage[] | null>,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<HistoryMessage[] | null> {
+  const timeoutMs = opts.timeoutMs ?? 120000
+  const intervalMs = opts.intervalMs ?? 1200
+  const deadline = Date.now() + timeoutMs
+  let last: HistoryMessage[] | null = null
+  let sawUser = false
+  while (Date.now() < deadline) {
+    last = await loadOnce()
+    if (last) {
+      const tail = last[last.length - 1]
+      // 末尾是 assistant → 这一轮已经答完，可以收工
+      if (tail && tail.role === 'assistant') return last
+      // 末尾是 user：说明已投递、正在等回复，继续等
+      if (tail && tail.role === 'user') sawUser = true
+    }
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  // 超时：返回最后读到的内容（可能仍是半截），至少不丢已显示的东西
+  void sawUser
+  return last
+}
+
 /* ══ 会话画布：一个会话 = 一张画布，卡片 = 对话回合 ══ */
 function ConvCanvas(props: {
   lang: Lang; sessionId: string; title: string; onBack: () => void
@@ -283,6 +314,15 @@ function ConvCanvas(props: {
   const [hasMore, setHasMore] = useState(false)
   // ★ 竞态守卫：切会话时旧请求若晚到，不能覆盖新会话的数据（否则卡"加载中"/0回合）
   const reqSeqRef = useRef(0)
+
+  /* 只取数据、不动界面 —— 给"等回复"轮询用（轮询期间不该每 1.2 秒重渲染一次） */
+  const fetchMessages = async (): Promise<HistoryMessage[] | null> => {
+    try {
+      const r = await BRIDGE.request<{ messages: HistoryMessage[] }>('history', { sessionId }, 120000)
+      return Array.isArray(r.messages) ? r.messages : null
+    } catch { return null }
+  }
+
   const load = async () => {
     const mySeq = ++reqSeqRef.current
     try {
@@ -394,9 +434,15 @@ function ConvCanvas(props: {
     try {
       await BRIDGE.request('send', { sessionId, text })
       setInput('')
+      // ★ send 只代表"已投递"，AI 还没回。先刷一次让提问立刻出现，
+      //   再等到回合闭合（末尾是 assistant）后刷新，回复才会显示出来。
       await load()
-      // 不再用 setTimeout 轮询：client.js 订阅了 sessions 变化会推 cards:refresh，
-      // 上面的 useEffect 监听到就会自动 load（问题③已修）
+      const settled = await waitForTurnSettled(fetchMessages)
+      if (settled) {
+        setMsgs(settled)
+      } else {
+        await load()
+      }
     } catch { /* 发送失败：保持输入不丢，让用户重试 */ } finally { setSending(false) }
   }
 
@@ -414,6 +460,9 @@ function ConvCanvas(props: {
       // 发出去后这张草稿卡就完成使命了：移除它，回合会出现在画布上
       setBranches((bs) => bs.filter((x) => x.id !== id))
       await load()
+      // ★ 同 doSend：等 AI 真正答完再刷新，否则新卡片上只有问、没有答
+      const settled = await waitForTurnSettled(fetchMessages)
+      if (settled) setMsgs(settled)
     } catch {
       // 发送失败：保留卡片和已输入文字，让用户重试（不丢内容）
       setBranches((bs) => bs.map((x) => x.id === id ? { ...x, busy: false } : x))
@@ -579,6 +628,10 @@ function ConvCanvas(props: {
 // 会话清单模块级缓存：从画布返回 / 从聊天页切回来时秒开（后台再刷新）
 let SESSIONS_CACHE: HibSession[] | null = null
 
+/* ★ 缓存失效：DSH 侧删掉会话后，缓存里仍留着那条记录 → 列表继续显示已删会话
+   （"删了还显示"的老毛病）。这里主动清掉，让下次进入列表重新拉取。 */
+function invalidateSessionsCache() { SESSIONS_CACHE = null }
+
 function SessionList(props: { lang: Lang; onEnter: (id: string, title: string) => void }): JSX.Element {
   const { lang, onEnter } = props
   const t = T[lang]
@@ -604,6 +657,15 @@ function SessionList(props: { lang: Lang; onEnter: (id: string, title: string) =
     void load()
     return () => { alive = false }
   }, [tick])
+
+  /* ★ 与画布同步：client.js 在会话变化时推 cards:refresh。
+     以前只有画布监听，列表要靠手动点 ⟳ —— 在画布里发消息/建会话后，
+     列表看起来"没更新"。现在列表也跟着刷。 */
+  useEffect(() => {
+    const h = () => { invalidateSessionsCache(); setTick((x) => x + 1) }
+    window.addEventListener('cards:refresh', h)
+    return () => window.removeEventListener('cards:refresh', h)
+  }, [])
 
   const ql = q.trim().toLowerCase()
   const all = sessions || []

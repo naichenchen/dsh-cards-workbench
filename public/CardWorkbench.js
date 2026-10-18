@@ -24046,6 +24046,24 @@ var CardWorkbenchMod = (() => {
   }
   var clip = (s, n) => s.length > n ? s.slice(0, n) + "\u2026" : s;
   var oneLine = (s) => s.replace(/\s+/g, " ").trim();
+  async function waitForTurnSettled(loadOnce, opts = {}) {
+    const timeoutMs = opts.timeoutMs ?? 12e4;
+    const intervalMs = opts.intervalMs ?? 1200;
+    const deadline = Date.now() + timeoutMs;
+    let last = null;
+    let sawUser = false;
+    while (Date.now() < deadline) {
+      last = await loadOnce();
+      if (last) {
+        const tail = last[last.length - 1];
+        if (tail && tail.role === "assistant") return last;
+        if (tail && tail.role === "user") sawUser = true;
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    void sawUser;
+    return last;
+  }
   function ConvCanvas(props) {
     const { lang, sessionId, title, onBack } = props;
     const t = T[lang];
@@ -24082,6 +24100,14 @@ var CardWorkbenchMod = (() => {
     const [diag, setDiag] = (0, import_react.useState)("");
     const [hasMore, setHasMore] = (0, import_react.useState)(false);
     const reqSeqRef = (0, import_react.useRef)(0);
+    const fetchMessages = async () => {
+      try {
+        const r = await BRIDGE.request("history", { sessionId }, 12e4);
+        return Array.isArray(r.messages) ? r.messages : null;
+      } catch {
+        return null;
+      }
+    };
     const load = async () => {
       const mySeq = ++reqSeqRef.current;
       try {
@@ -24204,6 +24230,12 @@ var CardWorkbenchMod = (() => {
         await BRIDGE.request("send", { sessionId, text });
         setInput("");
         await load();
+        const settled = await waitForTurnSettled(fetchMessages);
+        if (settled) {
+          setMsgs(settled);
+        } else {
+          await load();
+        }
       } catch {
       } finally {
         setSending(false);
@@ -24217,6 +24249,8 @@ var CardWorkbenchMod = (() => {
         await BRIDGE.request("send", { sessionId, text: br.text.trim() });
         setBranches((bs) => bs.filter((x) => x.id !== id));
         await load();
+        const settled = await waitForTurnSettled(fetchMessages);
+        if (settled) setMsgs(settled);
       } catch {
         setBranches((bs) => bs.map((x) => x.id === id ? { ...x, busy: false } : x));
       }
@@ -24402,6 +24436,9 @@ var CardWorkbenchMod = (() => {
     ] });
   }
   var SESSIONS_CACHE = null;
+  function invalidateSessionsCache() {
+    SESSIONS_CACHE = null;
+  }
   function SessionList(props) {
     const { lang, onEnter } = props;
     const t = T[lang];
@@ -24430,6 +24467,14 @@ var CardWorkbenchMod = (() => {
         alive = false;
       };
     }, [tick]);
+    (0, import_react.useEffect)(() => {
+      const h = () => {
+        invalidateSessionsCache();
+        setTick((x) => x + 1);
+      };
+      window.addEventListener("cards:refresh", h);
+      return () => window.removeEventListener("cards:refresh", h);
+    }, []);
     const ql = q.trim().toLowerCase();
     const all = sessions || [];
     const filtered = ql ? all.filter((s) => (s.title || "").toLowerCase().includes(ql)) : all;
