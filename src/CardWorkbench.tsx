@@ -447,10 +447,8 @@ function ConvCanvas(props: {
   }
 
   // 顺序连线：回合 i → i+1
-  // ★ 分支卡 = 「真·发到本会话」：把输入的新话题当作普通消息发进当前会话。
-  //   历史坑：这里原来只调 fork（新建会话），而且 br.text 从来没被发送过——
-  //   结果是「凭空多一个会话，里面还没有我问的问题和回复」。
-  //   现在直接走 send，回合就追加在当前画布上，和底部输入框行为一致。
+  // ★ 分支卡 = 把输入的内容发进当前会话（与底部输入框同一条通道）。
+  //   注意不要在这里调用 fork：fork 会新建会话，而用户期望的是"在当前会话接着说"。
   const sendBranch = async (id: string) => {
     const br = branches.find((x) => x.id === id)
     if (!br || !br.text.trim() || br.busy) return
@@ -564,7 +562,7 @@ function ConvCanvas(props: {
                     </div>
                   )
                 })}
-                {/* 分支卡：从某一回合分叉出去的新对话 */}
+                {/* 分支卡：从某一回合延续出去的追问输入框 */}
                 {branches.map((br) => (
                   <div
                     key={br.id}

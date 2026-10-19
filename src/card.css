@@ -238,7 +238,7 @@
   -webkit-line-clamp: 3; -webkit-box-orient: vertical;
 }
 
-/* ── 分支卡：从回合分叉出的新会话 ─────────────────────────── */
+/* ── 分支卡：回合上「接着聊」按钮与输入框 ─────────────────── */
 .cw-branch-btn {
   font: inherit; font-size: 13px; line-height: 1; padding: 2px 6px; border-radius: 6px;
   border: 1px solid var(--hairline); background: transparent; color: var(--ink-faint);
